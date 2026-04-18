@@ -1,7 +1,7 @@
 from deep_translator import MyMemoryTranslator as _MyMemoryTranslator
 from api.services.translation.base import Translator
 
-# MyMemory Hub (via deep-translator) often requires full language names 
+# MyMemory Hub (via deep-translator) often requires full language names
 # and does not support "auto" source detection in this version.
 ISO_TO_FULL = {
     "en": "english",
@@ -27,10 +27,10 @@ class MyMemoryTranslator(Translator):
     def translate(self, text: str, target_lang: str) -> str:
         if not text.strip():
             return text
-        
+
         # Default to "english" source and resolve target language full name
         full_target = ISO_TO_FULL.get(target_lang, target_lang)
-        
+
         try:
             return _MyMemoryTranslator(source="english", target=full_target).translate(text)
         except Exception as e:

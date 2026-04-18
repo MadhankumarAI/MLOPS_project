@@ -1,6 +1,10 @@
 import re
+from typing import TYPE_CHECKING
 from api.services.translation.factory import get_translator
 from api.services.translation.transliterate_util import transliterate_text, clean_hindi_artifacts
+
+if TYPE_CHECKING:
+    from api.services.ner_service import NERService
 
 
 class TranslateService:
@@ -21,7 +25,7 @@ class TranslateService:
         masked_text, placeholders = self._mask_entities(cleaned_text, entities)
         translated = translator.translate(masked_text, target_lang)
         final_text = self._restore_entities(translated, placeholders, target_lang, transliterate)
-        
+
         # Post-process to remove any leaked Latin artifacts from the final Hindi text
         final_text = clean_hindi_artifacts(final_text)
 
@@ -52,7 +56,7 @@ class TranslateService:
                 
             ent_id = id_match.group()
             placeholder_key = f"__ENT{ent_id}__"
-            
+
             original = placeholders.get(placeholder_key)
             if not original:
                 return match.group(0)

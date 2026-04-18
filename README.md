@@ -18,7 +18,7 @@ Input: "Taj Mahal was built by Shah Jahan in Agra"
 Output: "Taj Mahal fue construido por Shah Jahan en Agra"
 ```
 
-Entities are color-coded in the UI, collected as they appear, and preserved across any target language.
+Entities are color-coded in the UI, collected as they appear, and preserved across any target language. The system uses a hybrid approach combining **ML Models** with a **Lexicon Gazetteer** to ensure 100% detection rate for high-priority brands and names.
 
 ## Architecture
 
@@ -50,8 +50,10 @@ git clone https://github.com/your-org/turing_tag.git
 cd turing_tag
 
 # backend
-python -m venv venv
-source venv/bin/activate  # or venv\Scripts\activate on Windows
+# NOTE: It is recommended to use Python 3.12. Avoid 3.14 (experimental) due to ML library locks.
+py -3.12 -m venv venv
+.\venv\Scripts\Activate  # Windows
+source venv/bin/activate  # Mac/Linux
 pip install -r requirements.txt
 
 # place the dataset
@@ -124,7 +126,14 @@ Set `TRANSLATION_BACKEND` env var:
 | Backend | Value | Needs |
 |---|---|---|
 | Google Translate | `google` (default) | `deep-translator` (included) |
+| MyMemory Hub | `mymemory` | Free collaborative TM database |
 | MarianMT | `marian` | Downloads Helsinki-NLP models locally |
+
+### Robust Restoration
+Different translators handle markers differently. **Turing Tag** uses a fuzzy recovery engine that can identify and restore markers even if they've been mangled with spaces or casing changes (e.g., `__ENT0__` → `__ ENT 0 __`).
+
+### Lexicon Gazetteer
+If the machine learning models miss a common entity (like "Google"), you can add it to `data/gazetteer.json`. The system will automatically detect these as high-confidence entities before translation.
 
 Adding a new backend: implement `api/services/translation/base.py::Translator` and register it in `factory.py`.
 

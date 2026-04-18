@@ -1,7 +1,7 @@
 import json
 import re
-from pathlib import Path
 from pipeline.config import ROOT
+
 
 class LexiconService:
     def __init__(self):
@@ -29,6 +29,6 @@ class LexiconService:
                         "label": label,
                         "start": m.start(),
                         "end": m.end(),
-                        "confidence": 1.0 # Dictionary matches are high confidence
+                        "confidence": 1.0  # Dictionary matches are high confidence
                     })
         return matches

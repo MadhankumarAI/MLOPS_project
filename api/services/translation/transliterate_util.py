@@ -1,6 +1,7 @@
 import re
 from indic_transliteration import sanscript
-from indic_transliteration.sanscript import SchemeMap, SCHEMES, transliterate
+from indic_transliteration.sanscript import transliterate
+
 
 # Map our target_lang codes to indic-transliteration schemes
 SCRIPT_MAP = {
@@ -34,7 +35,7 @@ CUSTOM_TRANSLITERATIONS = {
 
 def clean_hindi_artifacts(text: str) -> str:
     """
-    Strips English alphabet characters from words containing Devanagari 
+    Strips English alphabet characters from words containing Devanagari
     characters to fix transliteration artifacts.
     """
     # Check if text contains Devanagari characters
@@ -53,10 +54,11 @@ def clean_hindi_artifacts(text: str) -> str:
 
     return re.sub(r'\S+', replace_word, text)
 
+
 def transliterate_text(text: str, target_lang: str) -> str:
     """
     Transliterates English text to the target script if supported.
-    Uses CUSTOM_TRANSLITERATIONS if available to ensure natural spelling 
+    Uses CUSTOM_TRANSLITERATIONS if available to ensure natural spelling
     for common entities, otherwise falls back to phonetic (ITRANS) conversion.
     """
     # Check custom mapping first (case-insensitive)
@@ -67,6 +69,6 @@ def transliterate_text(text: str, target_lang: str) -> str:
     script = SCRIPT_MAP.get(target_lang)
     if not script:
         return text
-    
+
     # Fallback to phonetic ITRANS transliteration
     return transliterate(text.lower(), sanscript.ITRANS, script)
