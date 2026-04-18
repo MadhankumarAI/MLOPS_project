@@ -8,7 +8,8 @@ router = APIRouter(prefix="/translate", tags=["translate"])
 
 @router.post("", response_model=TranslateResponse)
 def translate(req: TranslateRequest, svc=Depends(get_translate_service)):
-    result = svc.translate(req.text, req.target_lang)
+    manual_entities = [e.model_dump() for e in req.manual_entities]
+    result = svc.translate(req.text, req.target_lang, backend=req.backend, manual_entities=manual_entities, transliterate=req.transliterate)
     return TranslateResponse(
         source_text=result["source_text"],
         translated_text=result["translated_text"],

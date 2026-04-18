@@ -4,6 +4,7 @@ import re
 import torch
 
 from pipeline.config import ROOT
+from api.services.translation.transliterate_util import clean_hindi_artifacts
 
 
 class NERService:
@@ -11,6 +12,9 @@ class NERService:
         self.model = None
         self.model_type = None
         self._load_best_model()
+
+        from api.services.lexicon_service import LexiconService
+        self.lexicon = LexiconService()
 
     def _load_best_model(self):
         info_path = ROOT / "best_model_info.json"
@@ -80,19 +84,21 @@ class NERService:
         )
         self.model.eval()
 
-    def predict(self, text: str) -> tuple[list[str], list[str]]:
+    def predict(self, text: str) -> tuple[list[str], list[str], list[float], str]:
+        text = clean_hindi_artifacts(text)
         tokens = _tokenize(text)
         if not tokens:
-            return [], []
+            return [], [], [], text
 
+        confidences = [1.0] * len(tokens)
         if self.model_type == "crf":
-            tags = self.model.predict_tokens(tokens)
+            tags, confidences = self.model.predict_tokens_with_confidence(tokens)
         elif self.model_type == "bilstm_crf":
             tags = self._predict_bilstm(tokens)
         elif self.model_type == "bert_ner":
             tags = self._predict_bert(tokens)
 
-        return tokens, tags
+        return tokens, tags, confidences, text
 
     def _predict_bilstm(self, tokens):
         ids = [self.word2idx.get(t.lower(), 1) for t in tokens]
@@ -128,14 +134,28 @@ class NERService:
 
         return tags[:len(tokens)]
 
-    def extract_entities(self, tokens, tags):
+    def extract_entities(self, tokens, tags, text=None, confidences=None, manual_entities=None):
         entities = []
         current_entity = None
-        char_offset = 0
+        last_found_pos = 0
 
         for i, (token, tag) in enumerate(zip(tokens, tags)):
-            start = char_offset
-            end = start + len(token)
+            # Robustly find the token position in the text starting from the last found position
+            # This handles varying whitespace, punctuation, etc.
+            if text:
+                start = text.find(token, last_found_pos)
+                if start == -1:
+                    # Fallback if somehow not found (shouldn't happen with correct tokens)
+                    start = last_found_pos
+                end = start + len(token)
+                last_found_pos = end
+            else:
+                # Fallback to naive logic if text is not provided
+                start = last_found_pos
+                end = start + len(token)
+                last_found_pos = end + 1
+
+            conf = confidences[i] if confidences else 1.0
 
             if tag.startswith("B-"):
                 if current_entity:
@@ -145,21 +165,47 @@ class NERService:
                     "label": tag[2:],
                     "start": start,
                     "end": end,
+                    "confidence": conf
                 }
             elif tag.startswith("I-") and current_entity:
-                current_entity["text"] += " " + token
+                # Append the gap between tokens if we have text
+                if text:
+                    gap = text[current_entity["end"]:start]
+                    current_entity["text"] += gap + token
+                else:
+                    current_entity["text"] += " " + token
                 current_entity["end"] = end
+                current_entity["confidence"] = min(current_entity.get("confidence", 1.0), conf)
             else:
                 if current_entity:
                     entities.append(current_entity)
                     current_entity = None
 
-            char_offset = end + 1
-
         if current_entity:
             entities.append(current_entity)
 
+        # Reinforce with Lexicon (Gazetteer) matches
+        if text:
+            lexicon_matches = self.lexicon.find_matches(text)
+            for lex in lexicon_matches:
+                # Only add if it doesn't overlap with model predictions
+                if not any(_overlap(lex, existing) for existing in entities):
+                    entities.append(lex)
+            # Re-sort after adding lexicon matches
+            entities = sorted(entities, key=lambda e: e["start"])
+
+        if manual_entities:
+            final_entities = list(manual_entities)
+            for pred in entities:
+                if not any(_overlap(pred, man) for man in manual_entities):
+                    final_entities.append(pred)
+            entities = sorted(final_entities, key=lambda e: e["start"])
+
         return entities
+
+
+def _overlap(e1, e2):
+    return not (e1["end"] <= e2["start"] or e2["end"] <= e1["start"])
 
 
 def _tokenize(text: str) -> list[str]:

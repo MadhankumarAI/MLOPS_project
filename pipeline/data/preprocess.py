@@ -1,11 +1,24 @@
 import json
 import pickle
+import re
 from pathlib import Path
 
 from sklearn.model_selection import train_test_split
 
 from pipeline.config import ROOT, load_params
 from pipeline.data.loader import load_raw, group_sentences
+
+
+def clean_hindi_artifacts(text):
+    """
+    Strips English alphabet characters from words containing Devanagari 
+    characters to fix transliteration artifacts.
+    """
+    text_str = str(text)
+    if re.search(r'[\u0900-\u097F]', text_str):
+        cleaned = re.sub(r'[A-Za-z]', '', text_str)
+        return cleaned if cleaned else text_str
+    return text_str
 
 
 def build_vocab(sentences):
@@ -32,6 +45,11 @@ def run():
 
     print("[preprocess] loading raw data")
     df = load_raw(data_params["raw_path"])
+    
+    # Clean transliteration noise from words
+    if "word" in df.columns:
+        df["word"] = df["word"].apply(clean_hindi_artifacts)
+        
     sentences = group_sentences(df)
     print(f"[preprocess] {len(sentences)} sentences loaded")
 

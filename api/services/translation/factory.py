@@ -1,10 +1,12 @@
 from api.services.translation.base import Translator
 from api.services.translation.google import GoogleTranslator
 from api.services.translation.marian import MarianTranslator
+from api.services.translation.mymemory import MyMemoryTranslator
 
 _BACKENDS = {
     "google": GoogleTranslator,
     "marian": MarianTranslator,
+    "mymemory": MyMemoryTranslator,
 }
 
 

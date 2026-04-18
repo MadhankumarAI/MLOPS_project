@@ -121,6 +121,14 @@ class CRFModel:
         features = sent_features(dummy)
         return self.tagger.tag(features)
 
+    def predict_tokens_with_confidence(self, tokens):
+        dummy = [(t, _guess_pos(t), "O") for t in tokens]
+        features = sent_features(dummy)
+        self.tagger.set(features)
+        tags = self.tagger.tag()
+        marginals = [self.tagger.marginal(tag, i) for i, tag in enumerate(tags)]
+        return tags, marginals
+
 
 def _guess_pos(token):
     if token[0].isupper() and len(token) > 1:

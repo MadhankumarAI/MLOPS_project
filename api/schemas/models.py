@@ -10,6 +10,7 @@ class Entity(BaseModel):
     label: str
     start: int
     end: int
+    confidence: float = 1.0
 
 
 class NERResponse(BaseModel):
@@ -21,6 +22,9 @@ class NERResponse(BaseModel):
 class TranslateRequest(BaseModel):
     text: str
     target_lang: str = "es"
+    backend: str = "google"
+    manual_entities: list[Entity] = []
+    transliterate: bool = True
 
 
 class TranslateResponse(BaseModel):
