@@ -8,9 +8,10 @@ class FakeNER:
         for i, t in enumerate(tokens):
             if t[0].isupper() and t not in ("The", "A", "In", "On", "At", "Is"):
                 tags[i] = "B-per"
-        return tokens, tags
+        confidences = [1.0] * len(tokens)
+        return tokens, tags, confidences, text
 
-    def extract_entities(self, tokens, tags):
+    def extract_entities(self, tokens, tags, text=None, confidences=None, manual_entities=None):
         entities = []
         for i, (t, tag) in enumerate(zip(tokens, tags)):
             if tag != "O":
