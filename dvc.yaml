@@ -52,6 +52,20 @@ stages:
       - saved_models/bert_ner/metrics.json:
           cache: false
 
+  train_distilbert_ner:
+    cmd: python -m pipeline.training.train --model distilbert_ner
+    deps:
+      - pipeline/training/train.py
+      - pipeline/models/distilbert_ner.py
+      - data/processed
+    params:
+      - distilbert_ner
+    outs:
+      - saved_models/distilbert_ner
+    metrics:
+      - saved_models/distilbert_ner/metrics.json:
+          cache: false
+
   evaluate:
     cmd: python -m pipeline.training.evaluate
     deps:
@@ -59,6 +73,7 @@ stages:
       - saved_models/crf
       - saved_models/bilstm_crf
       - saved_models/bert_ner
+      - saved_models/distilbert_ner
       - data/processed
     metrics:
       - saved_models/comparison.json:

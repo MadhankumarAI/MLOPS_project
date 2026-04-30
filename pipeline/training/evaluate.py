@@ -5,7 +5,7 @@ from pipeline.config import ROOT
 
 def run():
     models_dir = ROOT / "saved_models"
-    models = ["crf", "bilstm_crf", "bert_ner"]
+    models = ["crf", "bilstm_crf", "bert_ner", "distilbert_ner"]
 
     results = {}
     best_model = None

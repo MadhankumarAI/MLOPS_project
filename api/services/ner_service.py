@@ -31,6 +31,7 @@ class NERService:
             "crf": self._load_crf,
             "bilstm_crf": self._load_bilstm_crf,
             "bert_ner": self._load_bert_ner,
+            "distilbert_ner": self._load_distilbert_ner,
         }
         loaders[self.model_type]()
 
@@ -84,6 +85,29 @@ class NERService:
         )
         self.model.eval()
 
+    def _load_distilbert_ner(self):
+        from pipeline.models.distilbert_ner import DistilBertNER, DistilBertNERTokenizer
+        processed = ROOT / "data" / "processed"
+
+        with open(processed / "tag2idx.json") as f:
+            self.tag2idx = json.load(f)
+        with open(processed / "idx2tag.json") as f:
+            self.idx2tag = json.load(f)
+
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        model_dir = ROOT / "saved_models" / "distilbert_ner"
+
+        self.bert_tokenizer = DistilBertNERTokenizer.__new__(DistilBertNERTokenizer)
+        from transformers import DistilBertTokenizerFast
+        self.bert_tokenizer.tokenizer = DistilBertTokenizerFast.from_pretrained(str(model_dir / "tokenizer"))
+        self.bert_tokenizer.max_len = 128
+
+        self.model = DistilBertNER("distilbert-base-uncased", len(self.tag2idx)).to(self.device)
+        self.model.load_state_dict(
+            torch.load(model_dir / "model.pt", weights_only=True, map_location=self.device)
+        )
+        self.model.eval()
+
     def predict(self, text: str) -> tuple[list[str], list[str], list[float], str]:
         text = clean_hindi_artifacts(text)
         tokens = _tokenize(text)
@@ -95,7 +119,7 @@ class NERService:
             tags, confidences = self.model.predict_tokens_with_confidence(tokens)
         elif self.model_type == "bilstm_crf":
             tags = self._predict_bilstm(tokens)
-        elif self.model_type == "bert_ner":
+        elif self.model_type in ("bert_ner", "distilbert_ner"):
             tags = self._predict_bert(tokens)
 
         return tokens, tags, confidences, text

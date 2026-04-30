@@ -25,6 +25,13 @@ bert_ner:
   batch_size: 16
   epochs: 3
 
+distilbert_ner:
+  model_name: distilbert-base-uncased
+  max_len: 128
+  lr: 5e-5
+  batch_size: 32
+  epochs: 3
+
 mlflow:
   experiment_name: turing-tag-ner
   tracking_uri: sqlite:///mlflow.db

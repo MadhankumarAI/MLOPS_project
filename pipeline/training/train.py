@@ -144,15 +144,42 @@ def _evaluate_bilstm(model, loader, idx2tag, device):
     return compute_metrics(all_true, all_pred)
 
 
+def train_distilbert_ner(params, train_sents, val_sents, test_sents, tag2idx, idx2tag):
+    from pipeline.models.distilbert_ner import DistilBertNER, DistilBertNERTokenizer
+    return _train_transformer_ner(
+        name="distilbert_ner",
+        hp=params["distilbert_ner"],
+        model_cls=DistilBertNER,
+        tokenizer_cls=DistilBertNERTokenizer,
+        train_sents=train_sents,
+        val_sents=val_sents,
+        test_sents=test_sents,
+        tag2idx=tag2idx,
+        idx2tag=idx2tag,
+    )
+
+
 def train_bert_ner(params, train_sents, val_sents, test_sents, tag2idx, idx2tag):
     from pipeline.models.bert_ner import BertNER, BertNERTokenizer
+    return _train_transformer_ner(
+        name="bert_ner",
+        hp=params["bert_ner"],
+        model_cls=BertNER,
+        tokenizer_cls=BertNERTokenizer,
+        train_sents=train_sents,
+        val_sents=val_sents,
+        test_sents=test_sents,
+        tag2idx=tag2idx,
+        idx2tag=idx2tag,
+    )
 
-    hp = params["bert_ner"]
+
+def _train_transformer_ner(name, hp, model_cls, tokenizer_cls, train_sents, val_sents, test_sents, tag2idx, idx2tag):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"[train:bert_ner] using device: {device}")
+    print(f"[train:{name}] using device: {device}")
 
-    tokenizer = BertNERTokenizer(hp["model_name"], hp["max_len"])
-    model = BertNER(hp["model_name"], len(tag2idx)).to(device)
+    tokenizer = tokenizer_cls(hp["model_name"], hp["max_len"])
+    model = model_cls(hp["model_name"], len(tag2idx)).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=float(hp["lr"]))
     loss_fn = torch.nn.CrossEntropyLoss(ignore_index=-100)
 
@@ -163,7 +190,7 @@ def train_bert_ner(params, train_sents, val_sents, test_sents, tag2idx, idx2tag)
     val_loader = DataLoader(val_ds, batch_size=hp["batch_size"])
     test_loader = DataLoader(test_ds, batch_size=hp["batch_size"])
 
-    model_dir = ROOT / "saved_models" / "bert_ner"
+    model_dir = ROOT / "saved_models" / name
     model_dir.mkdir(parents=True, exist_ok=True)
 
     best_f1 = 0
@@ -184,7 +211,7 @@ def train_bert_ner(params, train_sents, val_sents, test_sents, tag2idx, idx2tag)
             total_loss += loss.item()
 
         val_metrics = _evaluate_bert(model, val_loader, idx2tag, tag2idx, device)
-        print(f"[train:bert_ner] epoch {epoch+1}/{hp['epochs']} loss={total_loss/len(train_loader):.4f} val_f1={val_metrics['f1']:.4f}")
+        print(f"[train:{name}] epoch {epoch+1}/{hp['epochs']} loss={total_loss/len(train_loader):.4f} val_f1={val_metrics['f1']:.4f}")
 
         if val_metrics["f1"] > best_f1:
             best_f1 = val_metrics["f1"]
@@ -193,7 +220,7 @@ def train_bert_ner(params, train_sents, val_sents, test_sents, tag2idx, idx2tag)
 
     model.load_state_dict(torch.load(model_dir / "model.pt", weights_only=True))
     test_metrics = _evaluate_bert(model, test_loader, idx2tag, tag2idx, device)
-    print(f"[train:bert_ner] test F1={test_metrics['f1']:.4f}")
+    print(f"[train:{name}] test F1={test_metrics['f1']:.4f}")
 
     with open(model_dir / "metrics.json", "w") as f:
         json.dump(test_metrics, f, indent=2)
@@ -229,7 +256,7 @@ def _evaluate_bert(model, loader, idx2tag, tag2idx, device):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", required=True, choices=["crf", "bilstm_crf", "bert_ner"])
+    parser.add_argument("--model", required=True, choices=["crf", "bilstm_crf", "bert_ner", "distilbert_ner"])
     args = parser.parse_args()
 
     params = load_params()
@@ -252,6 +279,11 @@ def main():
         elif args.model == "bert_ner":
             mlflow.log_params(params["bert_ner"])
             metrics = train_bert_ner(
+                params, train_sents, val_sents, test_sents, tag2idx, idx2tag
+            )
+        elif args.model == "distilbert_ner":
+            mlflow.log_params(params["distilbert_ner"])
+            metrics = train_distilbert_ner(
                 params, train_sents, val_sents, test_sents, tag2idx, idx2tag
             )
 

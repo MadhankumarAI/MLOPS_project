@@ -28,3 +28,7 @@ scratch/
 .dvc/lock
 .dvc/rwlock
 .dvc/rwlock.lock
+
+# Large model files
+*.h5
+ner_datasetreference.csv/

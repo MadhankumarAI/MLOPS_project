@@ -23,24 +23,29 @@ Entities are color-coded in the UI, collected as they appear, and preserved acro
 ## Architecture
 
 ```
-pipeline/          NER model training (CRF, BiLSTM-CRF, BERT)
+pipeline/          NER model training (CRF, BiLSTM-CRF, BERT, DistilBERT)
 api/               FastAPI backend — NER + translation service
 web/               React + TypeScript + Vite frontend
 monitoring/        Prometheus config
 tests/             pytest suite
 ```
 
-**Pipeline** trains three NER models on the GMB corpus, tracks experiments with MLflow, and promotes the best one. **API** loads the winning model at startup and exposes REST + WebSocket endpoints. Translation is pluggable — swap Google Translate for MarianMT (local) via an env var. **Frontend** has request and realtime modes, highlights entities inline, and collects them in a sidebar.
+**Pipeline** trains four NER models on the GMB corpus, tracks experiments with MLflow, and promotes the best one. **API** loads the winning model at startup and exposes REST + WebSocket endpoints. Translation is pluggable — swap Google Translate for MyMemory or MarianMT (local) via an env var. **Frontend** has request and realtime modes, highlights entities inline, and collects them in a sidebar.
 
 ## Models
 
-| Model | Type | What it brings |
-|---|---|---|
-| CRF | Classical | Fast, interpretable, strong baseline |
-| BiLSTM-CRF | Deep learning | Captures sequence context |
-| BERT-NER | Transformer | Fine-tuned bert-base-uncased |
+Four NER models, all trained on the same 70/15/15 train/val/test split (random_state=42):
 
-All three are evaluated on F1/precision/recall. The best by F1 gets registered and served.
+| Model | Type | Test F1 | Notes |
+|---|---|---|---|
+| **CRF** | Classical | **0.8435** | Hand-crafted features (case, prefix/suffix, POS, ±2 context window). CPU only. |
+| BiLSTM-CRF | Deep learning | 0.8183 | PyTorch, GPU. Custom CRF layer with viterbi decoding. |
+| BERT-NER | Transformer | 0.8225 | Fine-tuned `bert-base-uncased`, 110M params. |
+| DistilBERT-NER | Transformer (small) | 0.8254 | Fine-tuned `distilbert-base-uncased`, 66M params, ~40% faster than BERT. |
+
+CRF currently leads on this dataset — classical features go a long way for English NER on a moderately-sized corpus. The transformer models are within 0.02 F1 of each other; DistilBERT slightly edges out BERT despite half the parameters.
+
+The best by F1 gets registered to the MLflow Model Registry and served by the API.
 
 ## Setup
 
@@ -68,6 +73,7 @@ python -m pipeline.data.preprocess
 python -m pipeline.training.train --model crf
 python -m pipeline.training.train --model bilstm_crf
 python -m pipeline.training.train --model bert_ner
+python -m pipeline.training.train --model distilbert_ner
 
 # evaluate and promote best
 python -m pipeline.training.evaluate
@@ -149,7 +155,7 @@ Opens a dashboard at `localhost:5000` where you can compare runs.
 
 ## DVC
 
-`dvc.yaml` defines the full reproducible pipeline: preprocess → train × 3 → evaluate. Run it end-to-end with:
+`dvc.yaml` defines the full reproducible pipeline: preprocess → train × 4 → evaluate. Run it end-to-end with:
 
 ```bash
 dvc repro
@@ -161,7 +167,11 @@ dvc repro
 pytest tests/ -v
 ```
 
-Covers: data loading, vocab construction, BiLSTM-CRF forward/backward, CRF feature extraction, entity masking/restoration, API endpoints.
+18 tests covering: data loading, vocab construction, BiLSTM-CRF forward/backward + convergence, CRF feature extraction, POS guesser, entity masking/restoration, response structure, API endpoints.
+
+## Data split
+
+Train / Val / Test = 70 / 15 / 15 of the GMB sentences, deterministic via `random_state=42` in `pipeline/data/preprocess.py`. Split is computed in two stages: 15% test off the top, then 15% of the original as validation from what remains. Same split is used across all four models for apples-to-apples comparison.
 
 ## CI
 
@@ -186,7 +196,8 @@ turing_tag/
 │   ├── models/
 │   │   ├── crf_model.py
 │   │   ├── bilstm_crf.py
-│   │   └── bert_ner.py
+│   │   ├── bert_ner.py
+│   │   └── distilbert_ner.py
 │   ├── training/
 │   │   ├── dataset.py
 │   │   ├── train.py
