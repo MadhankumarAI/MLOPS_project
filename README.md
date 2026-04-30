@@ -23,27 +23,32 @@ Entities are color-coded in the UI, collected as they appear, and preserved acro
 ## Architecture
 
 ```
-pipeline/          NER model training (CRF, BiLSTM-CRF, BERT, DistilBERT)
+pipeline/          NER model training (CRF, BiLSTM-CRF, BERT, DistilBERT, Keras BiLSTM)
 api/               FastAPI backend — NER + translation service
 web/               React + TypeScript + Vite frontend
 monitoring/        Prometheus config
 tests/             pytest suite
 ```
 
-**Pipeline** trains four NER models on the GMB corpus, tracks experiments with MLflow, and promotes the best one. **API** loads the winning model at startup and exposes REST + WebSocket endpoints. Translation is pluggable — swap Google Translate for MyMemory or MarianMT (local) via an env var. **Frontend** has request and realtime modes, highlights entities inline, and collects them in a sidebar.
+**Pipeline** trains four NER models on the GMB corpus (with a fifth Keras BiLSTM included as a baseline), tracks experiments with MLflow, and promotes the best one. **API** loads the winning model at startup and exposes REST + WebSocket endpoints. Translation is pluggable — swap Google Translate for MyMemory or MarianMT (local) via an env var. **Frontend** has request and realtime modes, highlights entities inline, and collects them in a sidebar.
 
 ## Models
 
-Four NER models, all trained on the same 70/15/15 train/val/test split (random_state=42):
+Five NER models. The four PyTorch models share a single 70/15/15 train/val/test split (random_state=42); the Keras model was trained earlier on its own split and is included as a baseline reference.
 
 | Model | Type | Test F1 | Notes |
 |---|---|---|---|
 | **CRF** | Classical | **0.8435** | Hand-crafted features (case, prefix/suffix, POS, ±2 context window). CPU only. |
-| BiLSTM-CRF | Deep learning | 0.8183 | PyTorch, GPU. Custom CRF layer with viterbi decoding. |
-| BERT-NER | Transformer | 0.8225 | Fine-tuned `bert-base-uncased`, 110M params. |
 | DistilBERT-NER | Transformer (small) | 0.8254 | Fine-tuned `distilbert-base-uncased`, 66M params, ~40% faster than BERT. |
+| BERT-NER | Transformer | 0.8225 | Fine-tuned `bert-base-uncased`, 110M params. |
+| Keras BiLSTM (`.h5`) | Deep learning | 0.8197 | TensorFlow/Keras. Embedding(35,178×128) → BiLSTM(64) → TimeDistributed Dense(17, softmax). No CRF layer. |
+| BiLSTM-CRF | Deep learning | 0.8183 | PyTorch, GPU. Embedding(128) → BiLSTM(256) → custom CRF layer with viterbi decoding. |
 
-CRF currently leads on this dataset — classical features go a long way for English NER on a moderately-sized corpus. The transformer models are within 0.02 F1 of each other; DistilBERT slightly edges out BERT despite half the parameters.
+**Why CRF wins on this dataset:**
+- Hand-crafted features (capitalization, suffix patterns, POS tags) inject linguistic priors that the deep models have to learn from scratch on only ~33K training sentences.
+- The CRF layer enforces hard tag-transition constraints (`I-per` cannot follow `B-org`); the Keras BiLSTM lacks this entirely and emits per-token softmax decisions.
+- Tens of thousands of parameters vs BERT's 110M means no overfitting risk on a small corpus.
+- The transformer models are within 0.02 F1 of each other — they'd likely overtake CRF with more data, longer training, or a learning-rate scheduler.
 
 The best by F1 gets registered to the MLflow Model Registry and served by the API.
 
